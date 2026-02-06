@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
-import json
+import random
 from datetime import datetime
-import base64
-from io import StringIO
+import numpy as np
 
 # 页面配置
 st.set_page_config(
@@ -12,415 +11,213 @@ st.set_page_config(
     layout="wide"
 )
 
-# 自定义CSS样式
+# 自定义样式
 st.markdown("""
 <style>
-    .main {
-        padding: 0rem 1rem;
-    }
-    
-    .seat-grid {
-        display: grid;
-        gap: 10px;
-        padding: 20px;
-        background-color: #f0f2f6;
-        border-radius: 10px;
-        min-height: 500px;
-        border: 2px dashed #ccc;
-    }
-    
-    .student-card {
-        padding: 10px 15px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+    .seat-card {
+        padding: 10px;
+        margin: 5px;
         border-radius: 8px;
-        cursor: move;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        transition: all 0.3s ease;
         text-align: center;
         font-weight: bold;
-        user-select: none;
-        position: relative;
-        z-index: 1000;
-    }
-    
-    .student-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-    }
-    
-    .desk {
-        width: 100px;
-        height: 60px;
-        background-color: #8B7355;
-        border: 2px solid #654321;
-        border-radius: 5px;
+        min-height: 60px;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: white;
-        font-weight: bold;
-        position: relative;
+        border: 2px solid #ddd;
+        transition: all 0.3s;
     }
-    
-    .desk.empty {
-        background-color: #e0e0e0;
-        border: 2px dashed #999;
-        color: #666;
-    }
-    
-    .desk-number {
-        position: absolute;
-        top: -20px;
-        left: 50%;
-        transform: translateX(-50%);
-        font-size: 12px;
-        color: #666;
-    }
-    
-    .classroom {
-        position: relative;
-        width: 100%;
-        height: 600px;
-        border: 2px solid #333;
-        background-color: #f9f9f9;
-        margin: 20px 0;
-    }
-    
-    .teacher-desk {
-        position: absolute;
-        top: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 200px;
-        height: 80px;
-        background-color: #4a6fa5;
-        border: 3px solid #2c5282;
-        border-radius: 5px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-weight: bold;
-    }
-    
-    .blackboard {
-        position: absolute;
-        top: 120px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 80%;
-        height: 100px;
-        background-color: #2d3748;
-        border: 5px solid #1a202c;
-        border-radius: 5px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 20px;
-        font-weight: bold;
-    }
-    
-    .row {
-        display: flex;
-        justify-content: center;
-        gap: 20px;
-        margin-bottom: 40px;
-    }
-    
-    .control-panel {
-        background-color: white;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        margin-bottom: 20px;
-    }
-    
-    .stButton button {
-        width: 100%;
+    .seat-card.occupied {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        border: none;
-        padding: 10px 15px;
-        border-radius: 5px;
-        font-weight: bold;
+        border-color: #764ba2;
     }
-    
-    .export-btn {
-        background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%) !important;
+    .seat-card.empty {
+        background-color: #f0f2f6;
+        color: #666;
+        border-style: dashed;
     }
-    
-    .drag-container {
-        min-height: 200px;
-        border: 2px dashed #ddd;
+    .student-item {
+        padding: 10px;
+        margin: 5px 0;
+        border-radius: 6px;
+        background-color: #f8f9fa;
+        border-left: 4px solid #667eea;
+    }
+    .classroom-container {
+        padding: 20px;
+        background-color: #f9f9f9;
         border-radius: 10px;
+        border: 2px solid #e0e0e0;
+    }
+    .teacher-area {
+        background-color: #4a6fa5;
+        color: white;
         padding: 15px;
-        margin: 15px 0;
-        background-color: #fafafa;
+        border-radius: 8px;
+        text-align: center;
+        margin-bottom: 30px;
+        border: 3px solid #2c5282;
+    }
+    .blackboard {
+        background-color: #2d3748;
+        color: white;
+        padding: 10px;
+        border-radius: 5px;
+        text-align: center;
+        margin-bottom: 20px;
+        border: 5px solid #1a202c;
+    }
+    .desk-number {
+        font-size: 12px;
+        color: #666;
+        position: absolute;
+        top: -15px;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+    .desk-container {
+        position: relative;
+        margin: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # 初始化session state
-if 'students' not in st.session_state:
-    st.session_state.students = []
-if 'seat_arrangement' not in st.session_state:
-    st.session_state.seat_arrangement = {}
-if 'classroom_layout' not in st.session_state:
-    st.session_state.classroom_layout = {
-        'rows': 4,
-        'cols': 6,
-        'desks_per_row': 6
-    }
+def init_session_state():
+    if 'students' not in st.session_state:
+        st.session_state.students = []
+    if 'seat_arrangement' not in st.session_state:
+        st.session_state.seat_arrangement = {}
+    if 'selected_student' not in st.session_state:
+        st.session_state.selected_student = None
+    if 'selected_seat' not in st.session_state:
+        st.session_state.selected_seat = None
+    if 'classroom_layout' not in st.session_state:
+        st.session_state.classroom_layout = {'rows': 4, 'cols': 6}
+
+init_session_state()
 
 def main():
     st.title("🎓 班级座位编排系统")
     st.markdown("---")
     
-    # 侧边栏控制面板
+    # 侧边栏
     with st.sidebar:
         st.header("📋 控制面板")
         
-        # 导入学生姓名
+        # 导入学生
         st.subheader("1. 导入学生名单")
-        
-        import_method = st.radio(
+        import_option = st.radio(
             "选择导入方式",
             ["手动输入", "上传文件", "示例数据"],
-            horizontal=True
+            index=2,
+            label_visibility="collapsed"
         )
         
-        if import_method == "手动输入":
+        if import_option == "手动输入":
             student_text = st.text_area(
                 "输入学生姓名（每行一个）",
                 height=150,
-                help="每个学生姓名占一行"
+                placeholder="例如：\n张三\n李四\n王五\n..."
             )
-            if student_text:
-                students_list = [name.strip() for name in student_text.split('\n') if name.strip()]
-                if st.button("导入学生名单"):
-                    st.session_state.students = students_list
-                    st.success(f"成功导入 {len(students_list)} 名学生")
-                    
-        elif import_method == "上传文件":
-            uploaded_file = st.file_uploader("上传学生名单文件", type=['txt', 'csv', 'xlsx'])
+            if st.button("导入名单", use_container_width=True) and student_text:
+                names = [name.strip() for name in student_text.split('\n') if name.strip()]
+                st.session_state.students = list(set(names))  # 去重
+                st.success(f"成功导入 {len(names)} 名学生")
+                st.rerun()
+                
+        elif import_option == "上传文件":
+            uploaded_file = st.file_uploader("选择文件", type=['txt', 'csv', 'xlsx'])
             if uploaded_file:
                 try:
                     if uploaded_file.name.endswith('.txt'):
                         content = uploaded_file.read().decode('utf-8')
-                        students_list = [name.strip() for name in content.split('\n') if name.strip()]
+                        names = [name.strip() for name in content.split('\n') if name.strip()]
                     elif uploaded_file.name.endswith('.csv'):
                         df = pd.read_csv(uploaded_file)
                         if '姓名' in df.columns:
-                            students_list = df['姓名'].dropna().tolist()
+                            names = df['姓名'].dropna().tolist()
                         else:
-                            students_list = df.iloc[:, 0].dropna().tolist()
-                    else:  # Excel文件
+                            names = df.iloc[:, 0].dropna().tolist()
+                    else:  # Excel
                         df = pd.read_excel(uploaded_file)
                         if '姓名' in df.columns:
-                            students_list = df['姓名'].dropna().tolist()
+                            names = df['姓名'].dropna().tolist()
                         else:
-                            students_list = df.iloc[:, 0].dropna().tolist()
+                            names = df.iloc[:, 0].dropna().tolist()
                     
-                    if st.button("导入学生名单"):
-                        st.session_state.students = students_list
-                        st.success(f"成功导入 {len(students_list)} 名学生")
+                    st.session_state.students = list(set(names))
+                    st.success(f"成功导入 {len(names)} 名学生")
+                    st.rerun()
                 except Exception as e:
-                    st.error(f"文件读取失败: {str(e)}")
+                    st.error(f"读取文件出错: {str(e)}")
         else:  # 示例数据
-            if st.button("加载示例数据"):
-                example_students = [
+            if st.button("加载示例数据", use_container_width=True):
+                example_names = [
                     "张三", "李四", "王五", "赵六", "钱七", "孙八",
                     "周九", "吴十", "郑十一", "王十二", "李十三", "张十四",
                     "刘十五", "陈十六", "杨十七", "黄十八", "赵十九", "周二十",
-                    "吴二十一", "郑二十二", "王二十三", "李二十四"
+                    "吴二十一", "郑二十二", "王二十三", "李二十四", "林二十五", "谢二十六"
                 ]
-                st.session_state.students = example_students
-                st.success(f"加载了 {len(example_students)} 名示例学生")
+                st.session_state.students = example_names
+                st.session_state.seat_arrangement = {}
+                st.success(f"加载了 {len(example_names)} 名示例学生")
+                st.rerun()
         
         st.markdown("---")
         
         # 教室布局设置
         st.subheader("2. 教室布局设置")
-        
         col1, col2 = st.columns(2)
         with col1:
-            rows = st.number_input("行数", min_value=1, max_value=10, value=4)
+            rows = st.number_input("行数", 1, 10, 4)
         with col2:
-            cols = st.number_input("每行座位数", min_value=1, max_value=10, value=6)
+            cols = st.number_input("每行座位", 1, 10, 6)
         
-        if st.button("更新教室布局"):
-            st.session_state.classroom_layout = {
-                'rows': rows,
-                'cols': cols,
-                'desks_per_row': cols
-            }
-            st.success("教室布局已更新")
+        if st.button("更新布局", use_container_width=True):
+            st.session_state.classroom_layout = {'rows': rows, 'cols': cols}
+            st.rerun()
         
         st.markdown("---")
         
         # 操作按钮
-        st.subheader("3. 操作")
+        st.subheader("3. 座位操作")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔄 随机排座", use_container_width=True):
-                random_arrange_seats()
-        with col2:
-            if st.button("🗑️ 清空座位", use_container_width=True):
-                st.session_state.seat_arrangement = {}
-                st.success("座位已清空")
-        
-        if st.button("📤 导出座位表", use_container_width=True, type="secondary"):
+        if st.button("🎲 随机排座", use_container_width=True):
+            random_arrange_seats()
+            
+        if st.button("🗑️ 清空所有座位", use_container_width=True):
+            st.session_state.seat_arrangement = {}
+            st.session_state.selected_student = None
+            st.session_state.selected_seat = None
+            st.rerun()
+            
+        if st.button("📊 导出座位表", use_container_width=True, type="secondary"):
             export_seating_chart()
     
-    # 主内容区
+    # 主界面 - 两列布局
     col1, col2 = st.columns([2, 1])
     
     with col1:
         st.subheader("🏫 教室座位图")
         display_classroom()
-        
-        # 显示座位安排表格
-        if st.session_state.seat_arrangement:
-            st.subheader("📊 座位安排表")
-            display_seating_table()
     
     with col2:
-        st.subheader("👥 学生名单")
+        st.subheader("👥 学生管理")
         display_student_list()
         
-        st.subheader("📝 座位安排")
-        if st.session_state.seat_arrangement:
-            for seat, student in st.session_state.seat_arrangement.items():
-                st.info(f"💺 {seat}: {student}")
+        st.subheader("🎯 手动安排")
+        if st.session_state.students:
+            manual_seat_assignment()
         else:
-            st.warning("暂无座位安排")
-        
-        # 拖拽说明
-        with st.expander("💡 使用说明"):
-            st.markdown("""
-            1. **导入学生**: 在左侧导入学生名单
-            2. **设置布局**: 调整教室座位布局
-            3. **安排座位**:
-               - 点击"随机排座"自动安排
-               - 或手动输入座位号安排
-            4. **导出**: 导出座位表为图片或Excel
-            
-            **座位编号规则**:
-            - A1: 第一排第一个
-            - B3: 第二排第三个
-            - 以此类推
-            """)
+            st.info("请先导入学生名单")
     
-    # 手动安排座位
-    st.markdown("---")
-    st.subheader("🎯 手动安排座位")
-    
-    if st.session_state.students:
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            student = st.selectbox("选择学生", st.session_state.students)
-        
-        with col2:
-            row_letter = st.selectbox("排", ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'])
-        
-        with col3:
-            col_num = st.number_input("列", min_value=1, max_value=st.session_state.classroom_layout['cols'], value=1)
-        
-        seat_id = f"{row_letter}{col_num}"
-        
-        col_btn1, col_btn2, col_btn3 = st.columns(3)
-        with col_btn1:
-            if st.button("安排到此座位", use_container_width=True):
-                assign_seat(student, seat_id)
-        with col_btn2:
-            if st.button("随机安排", use_container_width=True):
-                random_assign_student(student)
-        with col_btn3:
-            if st.button("移除座位", use_container_width=True):
-                remove_student_from_seat(student)
-
-def random_arrange_seats():
-    """随机安排座位"""
-    if not st.session_state.students:
-        st.error("请先导入学生名单")
-        return
-    
-    rows = st.session_state.classroom_layout['rows']
-    cols = st.session_state.classroom_layout['cols']
-    
-    import random
-    students = st.session_state.students.copy()
-    random.shuffle(students)
-    
-    seat_arrangement = {}
-    row_letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
-    
-    seat_index = 0
-    for i in range(rows):
-        for j in range(1, cols + 1):
-            if seat_index < len(students):
-                seat_id = f"{row_letters[i]}{j}"
-                seat_arrangement[seat_id] = students[seat_index]
-                seat_index += 1
-    
-    st.session_state.seat_arrangement = seat_arrangement
-    st.success(f"已随机安排 {seat_index} 名学生的座位")
-
-def assign_seat(student, seat_id):
-    """将学生安排到指定座位"""
-    # 检查座位是否已被占用
-    for existing_seat, existing_student in st.session_state.seat_arrangement.items():
-        if existing_student == student:
-            st.warning(f"{student} 已经在座位 {existing_seat} 上")
-            return
-    
-    st.session_state.seat_arrangement[seat_id] = student
-    st.success(f"已将 {student} 安排到座位 {seat_id}")
-
-def random_assign_student(student):
-    """将学生随机安排到空座位"""
-    if not st.session_state.students:
-        st.error("请先导入学生名单")
-        return
-    
-    rows = st.session_state.classroom_layout['rows']
-    cols = st.session_state.classroom_layout['cols']
-    row_letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
-    
-    # 找到所有空座位
-    empty_seats = []
-    for i in range(rows):
-        for j in range(1, cols + 1):
-            seat_id = f"{row_letters[i]}{j}"
-            if seat_id not in st.session_state.seat_arrangement:
-                empty_seats.append(seat_id)
-    
-    if not empty_seats:
-        st.error("没有空座位了")
-        return
-    
-    import random
-    random_seat = random.choice(empty_seats)
-    assign_seat(student, random_seat)
-
-def remove_student_from_seat(student):
-    """从座位中移除学生"""
-    seats_to_remove = []
-    for seat, s in st.session_state.seat_arrangement.items():
-        if s == student:
-            seats_to_remove.append(seat)
-    
-    for seat in seats_to_remove:
-        del st.session_state.seat_arrangement[seat]
-    
-    if seats_to_remove:
-        st.success(f"已从座位中移除 {student}")
-    else:
-        st.warning(f"{student} 没有座位安排")
+    # 显示座位表
+    if st.session_state.seat_arrangement:
+        st.markdown("---")
+        st.subheader("📋 座位安排表")
+        display_seating_table()
 
 def display_classroom():
     """显示教室座位图"""
@@ -428,132 +225,234 @@ def display_classroom():
     cols = st.session_state.classroom_layout['cols']
     row_letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
     
-    # 创建教室布局HTML
-    html_content = """
-    <div class="classroom">
-        <div class="teacher-desk">👨‍🏫 讲台</div>
-        <div class="blackboard">📚 黑板</div>
-    """
+    # 教室装饰
+    with st.container():
+        col1, col2, col3 = st.columns([1, 3, 1])
+        with col2:
+            st.markdown('<div class="teacher-area">👨‍🏫 讲台</div>', unsafe_allow_html=True)
+            st.markdown('<div class="blackboard">📚 黑 板</div>', unsafe_allow_html=True)
     
-    # 添加座位
-    for i in range(rows):
-        html_content += f'<div class="row" id="row-{row_letters[i]}">'
-        for j in range(1, cols + 1):
-            seat_id = f"{row_letters[i]}{j}"
-            student = st.session_state.seat_arrangement.get(seat_id, "")
-            
-            if student:
-                html_content += f'''
-                <div class="desk" id="desk-{seat_id}" draggable="true" ondragstart="drag(event)">
-                    <div class="desk-number">{seat_id}</div>
-                    <div class="student-card" id="student-{seat_id}">
-                        {student}
+    # 创建座位网格
+    st.markdown('<div class="classroom-container">', unsafe_allow_html=True)
+    
+    for row in range(rows):
+        # 创建一行座位
+        cols_list = st.columns(cols)
+        for col_idx, col in enumerate(cols_list):
+            seat_id = f"{row_letters[row]}{col_idx+1}"
+            with col:
+                # 检查座位是否有学生
+                student = st.session_state.seat_arrangement.get(seat_id)
+                
+                # 座位卡片
+                if student:
+                    # 如果这个座位被选中，显示不同颜色
+                    is_selected = st.session_state.selected_seat == seat_id
+                    border_color = "#ff4444" if is_selected else "#764ba2"
+                    
+                    st.markdown(f"""
+                    <div class="desk-container">
+                        <div class="desk-number">{seat_id}</div>
+                        <div class="seat-card occupied" style="border-color: {border_color};">
+                            {student}
+                        </div>
                     </div>
-                </div>
-                '''
-            else:
-                html_content += f'''
-                <div class="desk empty" id="desk-{seat_id}" ondrop="drop(event)" ondragover="allowDrop(event)">
-                    <div class="desk-number">{seat_id}</div>
-                    空位
-                </div>
-                '''
-        html_content += '</div>'
+                    """, unsafe_allow_html=True)
+                    
+                    # 移除按钮
+                    if st.button(f"移除", key=f"remove_{seat_id}", use_container_width=True):
+                        del st.session_state.seat_arrangement[seat_id]
+                        st.rerun()
+                else:
+                    # 空座位
+                    st.markdown(f"""
+                    <div class="desk-container">
+                        <div class="desk-number">{seat_id}</div>
+                        <div class="seat-card empty">
+                            空位
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # 安排按钮
+                    if st.button(f"安排", key=f"assign_{seat_id}", use_container_width=True):
+                        st.session_state.selected_seat = seat_id
+                        st.rerun()
     
-    html_content += "</div>"
+    st.markdown('</div>', unsafe_allow_html=True)
     
-    # 添加JavaScript实现拖拽功能
-    html_content += """
-    <script>
-    function allowDrop(ev) {
-        ev.preventDefault();
-    }
+    # 显示统计信息
+    total_seats = rows * cols
+    occupied_seats = len(st.session_state.seat_arrangement)
+    empty_seats = total_seats - occupied_seats
     
-    function drag(ev) {
-        ev.dataTransfer.setData("text", ev.target.closest('.desk').id);
-    }
-    
-    function drop(ev) {
-        ev.preventDefault();
-        var data = ev.dataTransfer.getData("text");
-        var draggedElement = document.getElementById(data);
-        var studentName = draggedElement.querySelector('.student-card').textContent;
-        var seatId = ev.target.id.replace('desk-', '');
-        
-        // 发送数据到Streamlit
-        window.parent.postMessage({
-            type: 'seat_change',
-            student: studentName,
-            seat: seatId
-        }, '*');
-        
-        // 更新UI
-        ev.target.innerHTML = '<div class="desk-number">' + seatId + '</div>' +
-                             '<div class="student-card">' + studentName + '</div>';
-        ev.target.classList.remove('empty');
-        ev.target.setAttribute('draggable', 'true');
-        ev.target.setAttribute('ondragstart', 'drag(event)');
-        
-        // 清空原来的座位
-        draggedElement.innerHTML = '<div class="desk-number">' + data.replace('desk-', '') + '</div>空位';
-        draggedElement.classList.add('empty');
-        draggedElement.removeAttribute('draggable');
-        draggedElement.removeAttribute('ondragstart');
-        draggedElement.setAttribute('ondrop', 'drop(event)');
-        draggedElement.setAttribute('ondragover', 'allowDrop(event)');
-    }
-    
-    // 监听来自Streamlit的消息
-    window.addEventListener('message', function(event) {
-        if (event.data.type === 'update_seats') {
-            // 可以在这里更新座位
-        }
-    });
-    </script>
-    """
-    
-    st.components.v1.html(html_content, height=650)
-    
-    # 处理拖拽事件
-    if 'seat_change' in st.query_params:
-        student = st.query_params['student']
-        seat = st.query_params['seat']
-        st.session_state.seat_arrangement[seat] = student
-        st.experimental_rerun()
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("总座位数", total_seats)
+    with col2:
+        st.metric("已安排", occupied_seats)
+    with col3:
+        st.metric("空座位", empty_seats)
 
 def display_student_list():
-    """显示学生名单"""
+    """显示学生列表"""
     if not st.session_state.students:
-        st.info("请先导入学生名单")
+        st.info("暂无学生名单")
         return
     
-    st.markdown(f"**学生总数**: {len(st.session_state.students)} 人")
+    # 搜索框
+    search_term = st.text_input("🔍 搜索学生", "")
     
-    # 显示未安排座位的学生
-    unseated_students = [s for s in st.session_state.students 
-                         if s not in st.session_state.seat_arrangement.values()]
-    
-    if unseated_students:
-        st.warning(f"⚠️ {len(unseated_students)} 名学生尚未安排座位:")
-        for student in unseated_students:
-            st.write(f"👤 {student}")
-    
-    # 显示所有学生
-    st.markdown("---")
-    st.markdown("**全部学生名单:**")
-    
-    cols = 3
-    students_per_col = (len(st.session_state.students) + cols - 1) // cols
-    
-    col_list = st.columns(cols)
-    for idx, student in enumerate(st.session_state.students):
-        col_idx = idx // students_per_col
-        with col_list[col_idx]:
-            if student in st.session_state.seat_arrangement.values():
-                seat = [k for k, v in st.session_state.seat_arrangement.items() if v == student][0]
-                st.success(f"✅ {student} (座位: {seat})")
+    # 显示学生列表
+    for student in st.session_state.students:
+        if search_term and search_term not in student:
+            continue
+            
+        # 检查是否已安排座位
+        assigned_seat = None
+        for seat, s in st.session_state.seat_arrangement.items():
+            if s == student:
+                assigned_seat = seat
+                break
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            if assigned_seat:
+                st.markdown(f'<div class="student-item">✅ {student} <span style="color: #666; font-size: 0.9em;">(座位: {assigned_seat})</span></div>', unsafe_allow_html=True)
             else:
-                st.write(f"👤 {student}")
+                st.markdown(f'<div class="student-item">👤 {student}</div>', unsafe_allow_html=True)
+        
+        with col2:
+            if assigned_seat:
+                if st.button("移除", key=f"remove_stu_{student}", use_container_width=True):
+                    del st.session_state.seat_arrangement[assigned_seat]
+                    st.rerun()
+            else:
+                if st.button("选择", key=f"select_{student}", use_container_width=True):
+                    st.session_state.selected_student = student
+                    st.rerun()
+    
+    # 显示统计
+    total_students = len(st.session_state.students)
+    unassigned = [s for s in st.session_state.students 
+                  if s not in st.session_state.seat_arrangement.values()]
+    
+    st.info(f"共 {total_students} 名学生，{len(unassigned)} 名未安排座位")
+
+def manual_seat_assignment():
+    """手动安排座位"""
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # 选择学生
+        student_options = [""] + [s for s in st.session_state.students 
+                                 if s not in st.session_state.seat_arrangement.values()]
+        selected_student = st.selectbox(
+            "选择学生",
+            student_options,
+            index=0 if st.session_state.selected_student is None else 
+                  student_options.index(st.session_state.selected_student),
+            key="manual_select_student"
+        )
+        
+        if selected_student:
+            st.session_state.selected_student = selected_student
+    
+    with col2:
+        # 选择座位
+        rows = st.session_state.classroom_layout['rows']
+        cols = st.session_state.classroom_layout['cols']
+        row_letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+        
+        # 获取空座位列表
+        empty_seats = []
+        for row in range(rows):
+            for col in range(1, cols+1):
+                seat_id = f"{row_letters[row]}{col}"
+                if seat_id not in st.session_state.seat_arrangement:
+                    empty_seats.append(seat_id)
+        
+        seat_options = [""] + empty_seats
+        selected_seat = st.selectbox(
+            "选择座位",
+            seat_options,
+            index=0 if st.session_state.selected_seat is None else 
+                  (seat_options.index(st.session_state.selected_seat) if st.session_state.selected_seat in seat_options else 0),
+            key="manual_select_seat"
+        )
+        
+        if selected_seat:
+            st.session_state.selected_seat = selected_seat
+    
+    # 安排按钮
+    if st.session_state.selected_student and st.session_state.selected_seat:
+        if st.button("✅ 安排到选中座位", use_container_width=True, type="primary"):
+            # 检查学生是否已被安排
+            for seat, student in st.session_state.seat_arrangement.items():
+                if student == st.session_state.selected_student:
+                    st.warning(f"{student} 已在座位 {seat}，请先移除")
+                    return
+            
+            # 安排座位
+            st.session_state.seat_arrangement[st.session_state.selected_seat] = st.session_state.selected_student
+            st.session_state.selected_student = None
+            st.session_state.selected_seat = None
+            st.rerun()
+    
+    # 快速安排按钮
+    if st.session_state.selected_student and not st.session_state.selected_seat:
+        if st.button("🎲 随机安排空座位", use_container_width=True):
+            random_assign_student(st.session_state.selected_student)
+
+def random_arrange_seats():
+    """随机安排所有座位"""
+    if not st.session_state.students:
+        st.error("请先导入学生名单")
+        return
+    
+    rows = st.session_state.classroom_layout['rows']
+    cols = st.session_state.classroom_layout['cols']
+    row_letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+    
+    # 生成所有座位
+    all_seats = [f"{row_letters[row]}{col+1}" for row in range(rows) for col in range(cols)]
+    
+    # 打乱学生和座位
+    shuffled_students = st.session_state.students.copy()
+    random.shuffle(shuffled_students)
+    random.shuffle(all_seats)
+    
+    # 安排座位
+    st.session_state.seat_arrangement = {}
+    for i in range(min(len(shuffled_students), len(all_seats))):
+        st.session_state.seat_arrangement[all_seats[i]] = shuffled_students[i]
+    
+    st.success(f"已随机安排 {len(st.session_state.seat_arrangement)} 个座位")
+    st.rerun()
+
+def random_assign_student(student):
+    """随机安排一个学生到空座位"""
+    rows = st.session_state.classroom_layout['rows']
+    cols = st.session_state.classroom_layout['cols']
+    row_letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+    
+    # 找到所有空座位
+    empty_seats = []
+    for row in range(rows):
+        for col in range(1, cols+1):
+            seat_id = f"{row_letters[row]}{col}"
+            if seat_id not in st.session_state.seat_arrangement:
+                empty_seats.append(seat_id)
+    
+    if not empty_seats:
+        st.error("没有空座位了")
+        return
+    
+    # 随机选择一个空座位
+    random_seat = random.choice(empty_seats)
+    st.session_state.seat_arrangement[random_seat] = student
+    st.session_state.selected_student = None
+    st.rerun()
 
 def display_seating_table():
     """显示座位安排表格"""
@@ -561,21 +460,21 @@ def display_seating_table():
     cols = st.session_state.classroom_layout['cols']
     row_letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
     
-    # 创建座位表
-    seating_data = []
-    for i in range(rows):
+    # 创建座位表数据
+    table_data = []
+    for row in range(rows):
         row_data = []
-        for j in range(1, cols + 1):
-            seat_id = f"{row_letters[i]}{j}"
+        for col in range(1, cols+1):
+            seat_id = f"{row_letters[row]}{col}"
             student = st.session_state.seat_arrangement.get(seat_id, "")
-            row_data.append(student)
-        seating_data.append(row_data)
+            row_data.append(student if student else "空")
+        table_data.append(row_data)
     
     # 创建DataFrame
     df = pd.DataFrame(
-        seating_data,
-        columns=[f"第{i}列" for i in range(1, cols + 1)],
-        index=[f"{row_letters[i]}排" for i in range(rows)]
+        table_data,
+        columns=[f"第{col}列" for col in range(1, cols+1)],
+        index=[f"{row_letters[row]}排" for row in range(rows)]
     )
     
     # 显示表格
@@ -588,49 +487,62 @@ def display_seating_table():
 def export_seating_chart():
     """导出座位表"""
     if not st.session_state.seat_arrangement:
-        st.error("没有座位安排可以导出")
+        st.warning("没有座位安排可以导出")
         return
     
-    # 创建DataFrame
+    # 创建详细的座位表
     rows = st.session_state.classroom_layout['rows']
     cols = st.session_state.classroom_layout['cols']
     row_letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
     
-    seating_data = []
-    for i in range(rows):
-        row_data = []
-        for j in range(1, cols + 1):
-            seat_id = f"{row_letters[i]}{j}"
+    # 创建DataFrame
+    data = []
+    for row in range(rows):
+        for col in range(1, cols+1):
+            seat_id = f"{row_letters[row]}{col}"
             student = st.session_state.seat_arrangement.get(seat_id, "")
-            row_data.append(f"{seat_id}: {student}" if student else f"{seat_id}: 空")
-        seating_data.append(row_data)
+            data.append({
+                "座位号": seat_id,
+                "学生姓名": student if student else "空",
+                "排": row_letters[row],
+                "列": col
+            })
     
-    df = pd.DataFrame(
-        seating_data,
-        columns=[f"第{i}列" for i in range(1, cols + 1)],
-        index=[f"{row_letters[i]}排" for i in range(rows)]
-    )
+    df = pd.DataFrame(data)
     
-    # 导出为Excel
-    @st.cache_data
-    def convert_df_to_excel(df):
-        output = pd.ExcelWriter('座位安排表.xlsx', engine='openpyxl')
-        df.to_excel(output, sheet_name='座位表')
-        output.close()
-        return open('座位安排表.xlsx', 'rb').read()
+    # 创建Excel文件
+    excel_file = "座位安排表.xlsx"
+    with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='座位表', index=False)
+        
+        # 添加汇总表
+        summary_data = {
+            "统计项": ["总座位数", "已安排座位", "空座位", "总学生数", "未安排学生"],
+            "数量": [
+                rows * cols,
+                len(st.session_state.seat_arrangement),
+                rows * cols - len(st.session_state.seat_arrangement),
+                len(st.session_state.students),
+                len([s for s in st.session_state.students if s not in st.session_state.seat_arrangement.values()])
+            ]
+        }
+        pd.DataFrame(summary_data).to_excel(writer, sheet_name='统计', index=False)
     
-    excel_data = convert_df_to_excel(df)
+    # 提供下载
+    with open(excel_file, "rb") as f:
+        excel_data = f.read()
     
-    # 下载按钮
     st.download_button(
-        label="📥 下载Excel座位表",
+        label="📥 下载座位表(Excel)",
         data=excel_data,
-        file_name=f"座位安排表_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        file_name=f"班级座位表_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
     )
     
-    # 显示导出信息
-    st.info(f"共导出 {len(st.session_state.seat_arrangement)} 个座位安排")
+    # 显示预览
+    with st.expander("📄 预览座位表"):
+        st.dataframe(df, use_container_width=True)
 
 if __name__ == "__main__":
     main()
